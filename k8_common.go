@@ -1,3 +1,12 @@
+//This package contains helper functions for managing K8s cluster and Helm charts
+//  Creating and deleting K8 manifests yamls
+//  Installing and uninstalling Helm charts
+//  Getting the status of K8s services
+//  Getting the status of K8s deployments
+//  Getting the status of K8s pods
+//  Getting the status of K8s services
+//  Managing Helm releases
+//  Managing Helm repositories
 package go_k8_helm
 
 import (
