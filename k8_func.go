@@ -10,7 +10,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/Mrpye/golib/lib"
+	lib_log "github.com/Mrpye/golib/log"
 	"github.com/Mrpye/helm-api/modules/body_types"
 	"github.com/gookit/color"
 
@@ -99,7 +99,8 @@ func (m *K8) PodExec(ns string, pod_name string, command string) (string, error)
 	//***************
 	//Run the command
 	//***************
-	l := &lib.LogStreamer{}
+
+	l := &lib_log.LogStreamer{}
 
 	err = exec.StreamWithContext(context.Background(), remotecommand.StreamOptions{
 		Stdin:  os.Stdin,
@@ -159,7 +160,7 @@ func (m *K8) PodCopy(ns string, src string, dst string, container_name string) (
 	err = copyOptions.Run()
 
 	if err != nil {
-		log.Fatal(err)
+		return "", err
 	}
 
 	error_str := errOut.String()

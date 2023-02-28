@@ -3,7 +3,7 @@ module github.com/Mrpye/go_k8_helm
 go 1.18
 
 require (
-	github.com/Mrpye/golib v0.1.1
+	github.com/Mrpye/golib v0.2.1
 	github.com/Mrpye/helm-api v0.0.0-20230214135117-836f2a739630
 	github.com/gookit/color v1.5.2
 	github.com/pkg/errors v0.9.1
@@ -92,7 +92,6 @@ require (
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nu7hatch/gouuid v0.0.0-20131221200532-179d4d0c4d8d // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0-rc2 // indirect
 	github.com/pelletier/go-toml/v2 v2.0.6 // indirect
