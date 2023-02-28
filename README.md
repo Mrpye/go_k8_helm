@@ -23,7 +23,7 @@ This will take you through the steps to install and get go_k8_helm up and runnin
 <summary>1. Install</summary>
 
 ``` bash
-go install github.com/Mrpye/go_k8_helm
+go get github.com/Mrpye/go_k8_helm
 ```
 </details>
 
