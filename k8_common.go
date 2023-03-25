@@ -1,12 +1,13 @@
-//This package contains helper functions for managing K8s cluster and Helm charts
-//  Creating and deleting K8 manifests yamls
-//  Installing and uninstalling Helm charts
-//  Getting the status of K8s services
-//  Getting the status of K8s deployments
-//  Getting the status of K8s pods
-//  Getting the status of K8s services
-//  Managing Helm releases
-//  Managing Helm repositories
+// This package contains helper functions for managing K8s cluster and Helm charts
+//
+//	Creating and deleting K8 manifests yamls
+//	Installing and uninstalling Helm charts
+//	Getting the status of K8s services
+//	Getting the status of K8s deployments
+//	Getting the status of K8s pods
+//	Getting the status of K8s services
+//	Managing Helm releases
+//	Managing Helm repositories
 package go_k8_helm
 
 import (
@@ -20,7 +21,9 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-//Read the config for the connection to K8s cluster
+// buildRestConfig builds the rest config
+// Reads the kube config file and returns the rest config
+// returns error if there is an issue
 func (m *K8) buildRestConfig() (*rest.Config, error) {
 	var kube_config string
 

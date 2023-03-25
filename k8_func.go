@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	lib_log "github.com/Mrpye/golib/log"
+	lib_string "github.com/Mrpye/golib/string"
 	"github.com/Mrpye/helm-api/modules/body_types"
 	"github.com/gookit/color"
 
@@ -28,7 +29,6 @@ import (
 	memory "k8s.io/client-go/discovery/cached"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/restmapper"
 	"k8s.io/client-go/tools/remotecommand"
 	"k8s.io/kubectl/pkg/cmd/cp"
@@ -36,6 +36,7 @@ import (
 	"k8s.io/kubectl/pkg/scheme"
 )
 
+// decUnstructured is the decoder for unstructured
 var decUnstructured = yaml.NewDecodingSerializer(unstructured.UnstructuredJSONScheme)
 
 // PodExec executes a command in a pod
@@ -62,17 +63,10 @@ func (m *K8) PodExec(ns string, pod_name string, command string) (string, error)
 		cmd[x] = strings.ReplaceAll(cmd[x], "\"", "")
 	}
 
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return "", err
-	}
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +85,7 @@ func (m *K8) PodExec(ns string, pod_name string, command string) (string, error)
 		option,
 		scheme.ParameterCodec,
 	)
-	exec, err := remotecommand.NewSPDYExecutor(config, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(m.config, "POST", req.URL())
 	if err != nil {
 		return "", err
 	}
@@ -122,21 +116,15 @@ func (m *K8) PodCopy(ns string, src string, dst string, container_name string) (
 	if ns == "" {
 		ns = "default"
 	}
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return "", err
-	}
 
-	config.APIPath = "/api"                                                 // Make sure we target /api and not just /
-	config.GroupVersion = &schema.GroupVersion{Group: "api", Version: "v1"} // this targets the core api groups so the url path will be /api/v1
-	config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
+	m.config.APIPath = "/api" // Make sure we target /api and not just /
+	//Group: "api",
+	m.config.GroupVersion = &schema.GroupVersion{Version: "v1"} // this targets the core api groups so the url path will be /api/v1
+	m.config.NegotiatedSerializer = serializer.WithoutConversionCodecFactory{CodecFactory: scheme.Codecs}
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return "", err
 	}
@@ -152,11 +140,14 @@ func (m *K8) PodCopy(ns string, src string, dst string, container_name string) (
 	copyOptions.Complete(nf, cobra, []string{src, dst})
 
 	copyOptions.Clientset = clientset
-	copyOptions.ClientConfig = config
+	copyOptions.ClientConfig = m.config
 	copyOptions.Container = container_name
 	copyOptions.Namespace = ns
 
-	copyOptions.Validate()
+	err = copyOptions.Validate()
+	if err != nil {
+		return "", err
+	}
 	err = copyOptions.Run()
 
 	if err != nil {
@@ -180,23 +171,70 @@ func (m *K8) dryRun(dry_run bool) string {
 	return ""
 }
 
+// ProcessK8File processes a k8 file with multiple definitions separated with ---
+// file_data: file data
+// ns: namespace
+// apply: apply the file
+// return: error
+func (m *K8) ProcessK8File(file_data []byte, ns string, apply bool) error {
+	//**************************************
+	//Split the file and action on each part
+	//**************************************
+	yaml_data := strings.ReplaceAll(string(file_data), "\r\n", "\n")
+	parts := strings.Split(string(yaml_data), "---\n")
+
+	//**********************************
+	//See if there is a namespace create
+	//**********************************
+	if apply {
+		found := false
+		for _, o := range parts {
+			if strings.Contains(o, "kind: Namespace") {
+				found = true
+			}
+		}
+		if ns != "default" && ns != "" && !found {
+			namespace := "kind: Namespace\napiVersion: v1\nmetadata:\n  name: " + ns + "\n  labels:\n    name: " + ns
+			parts = lib_string.InsertString(parts, 0, namespace)
+		}
+	}
+
+	//**********************
+	//Loop through the parts
+	//**********************
+	for _, o := range parts {
+		if apply {
+			if o != "" {
+				err := m.ApplyYaml(o, ns)
+				if err != nil {
+					return err
+				}
+			}
+		} else {
+			m.DeleteYaml(o, ns)
+		}
+
+	}
+	return nil
+}
+
 // DeleteYaml deletes a resource using a yaml manifest
 // ctx: context
 // cfg: k8 config
 // yaml: yaml manifest
 // ns: namespace
 // return: error
-func (m *K8) DeleteYaml(ctx context.Context, cfg *rest.Config, yaml string, ns string) error {
+func (m *K8) DeleteYaml(yaml string, ns string) error {
 
 	// 1. Prepare a RESTMapper to find GVR
-	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	dc, err := discovery.NewDiscoveryClientForConfig(m.config)
 	if err != nil {
 		return err
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
 
 	// 2. Prepare the dynamic client
-	dyn, err := dynamic.NewForConfig(cfg)
+	dyn, err := dynamic.NewForConfig(m.config)
 	if err != nil {
 		return err
 	}
@@ -245,7 +283,7 @@ func (m *K8) DeleteYaml(ctx context.Context, cfg *rest.Config, yaml string, ns s
 	deleteOptions := metav1.DeleteOptions{
 		PropagationPolicy: &deletePolicy,
 	}
-	err = dr.Delete(ctx, obj.GetName(), deleteOptions)
+	err = dr.Delete(m.ctx, obj.GetName(), deleteOptions)
 	if err != nil {
 		return fmt.Errorf("info: Failed to delete Kind(%s) Namespace(%s) Name(%s) Error(%s)", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err.Error())
 	}
@@ -259,17 +297,17 @@ func (m *K8) DeleteYaml(ctx context.Context, cfg *rest.Config, yaml string, ns s
 // yaml: yaml manifest
 // ns: namespace
 // return: error
-func (m *K8) ApplyYaml(ctx context.Context, cfg *rest.Config, yaml string, ns string) error {
+func (m *K8) ApplyYaml(yaml string, ns string) error {
 
 	// 1. Prepare a RESTMapper to find GVR
-	dc, err := discovery.NewDiscoveryClientForConfig(cfg)
+	dc, err := discovery.NewDiscoveryClientForConfig(m.config)
 	if err != nil {
 		return err
 	}
 	mapper := restmapper.NewDeferredDiscoveryRESTMapper(memory.NewMemCacheClient(dc))
 
 	// 2. Prepare the dynamic client
-	dyn, err := dynamic.NewForConfig(cfg)
+	dyn, err := dynamic.NewForConfig(m.config)
 	if err != nil {
 		return err
 	}
@@ -324,12 +362,12 @@ func (m *K8) ApplyYaml(ctx context.Context, cfg *rest.Config, yaml string, ns st
 		//lib.FormatResults("**Payload**", yaml)
 	}
 
-	_, err = dr.Patch(ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
+	_, err = dr.Patch(m.ctx, obj.GetName(), types.ApplyPatchType, data, metav1.PatchOptions{
 		FieldManager: "package-manager",
 		DryRun:       []string{m.dryRun(m.dry_run)},
 	})
 	if err == nil {
-		fmt.Printf("Info: Created Kind(%s) Namespace(%s) Name(%s)", obj.GetKind(), obj.GetNamespace(), obj.GetName())
+		fmt.Printf("Info: Created Kind(%s) Namespace(%s) Name(%s)\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
 	}
 	//*****************
 	//Dry Run Show Info
@@ -344,7 +382,7 @@ func (m *K8) ApplyYaml(ctx context.Context, cfg *rest.Config, yaml string, ns st
 	if !m.dry_run {
 		//Last resort delete and create
 		if err != nil {
-			fmt.Printf("Info: Error patching Kind(%s) Namespace(%s) Name(%s) Error(%s)", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err.Error())
+			fmt.Printf("Info: Error patching Kind(%s) Namespace(%s) Name(%s) Error(%s)\n", obj.GetKind(), obj.GetNamespace(), obj.GetName(), err.Error())
 			//********************
 			//Lets delete the item
 			//********************
@@ -354,18 +392,18 @@ func (m *K8) ApplyYaml(ctx context.Context, cfg *rest.Config, yaml string, ns st
 			}
 
 			log.Printf("Info: Cleaning Kind(%s) Namespace(%s) Name(%s)\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
-			dr.Delete(ctx, obj.GetName(), deleteOptions)
+			dr.Delete(m.ctx, obj.GetName(), deleteOptions)
 
 			//********
 			//Recreate
 			//********
 			log.Printf("Info: Creating Kind(%s) Namespace(%s) Name(%s)\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
-			_, err = dr.Create(ctx, obj, metav1.CreateOptions{})
+			_, err = dr.Create(m.ctx, obj, metav1.CreateOptions{})
 			if err != nil {
 				return err
 			}
 			if err == nil {
-				fmt.Printf("Info: Created Kind(%s) Namespace(%s) Name(%s) ", obj.GetKind(), obj.GetNamespace(), obj.GetName())
+				fmt.Printf("Info: Created Kind(%s) Namespace(%s) Name(%s)\n", obj.GetKind(), obj.GetNamespace(), obj.GetName())
 			}
 		}
 	}
@@ -377,18 +415,11 @@ func (m *K8) ApplyYaml(ctx context.Context, cfg *rest.Config, yaml string, ns st
 // ns: namespace
 // return: v1.SecretList, error
 func (m *K8) GetSecrets(ns string) (*v1.SecretList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
 
 	//**********************
 	// creates the clientset
 	//**********************
-	client_set, err := kubernetes.NewForConfig(config)
+	client_set, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -406,17 +437,11 @@ func (m *K8) GetSecrets(ns string) (*v1.SecretList, error) {
 // ns: namespace
 // return: v1.PodList, error
 func (m *K8) GetPods(ns string) (*v1.PodList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
+
 	//**********************
 	// creates the clientset
 	//**********************
-	client_set, err := kubernetes.NewForConfig(config)
+	client_set, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -430,21 +455,39 @@ func (m *K8) GetPods(ns string) (*v1.PodList, error) {
 	return pods, nil
 }
 
-// GetServices gets services from a k8 cluster
+// DeletePod deletes a pod from a k8 cluster
 // ns: namespace
-//	return: v1.ServiceList, error
-func (m *K8) GetServices(ns string) (*v1.ServiceList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
+// name: pod name
+// return: error
+func (m *K8) DeletePod(ns string, name string) error {
+
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().Pods(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// GetServices gets services from a k8 cluster
+// ns: namespace
+//
+//	return: v1.ServiceList, error
+func (m *K8) GetServices(ns string) (*v1.ServiceList, error) {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -458,21 +501,38 @@ func (m *K8) GetServices(ns string) (*v1.ServiceList, error) {
 	return pods, nil
 }
 
+// DeleteService deletes a service from a k8 cluster
+// ns: namespace
+// name: name of the service
+// return: error
+func (m *K8) DeleteService(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().Services(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetDeployments gets deployments from a k8 cluster
 // ns: namespace
 // return: appsv1.DeploymentList, error
 func (m *K8) GetDeployments(ns string) (*appsv1.DeploymentList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
+
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -486,21 +546,34 @@ func (m *K8) GetDeployments(ns string) (*appsv1.DeploymentList, error) {
 	return pods, nil
 }
 
+func (m *K8) DeleteDeployment(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.AppsV1().Deployments(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetStatefulSets gets statefulsets from a k8 cluster
 // ns: namespace
 // return: appsv1.StatefulSetList, error
 func (m *K8) GetStatefulSets(ns string) (*appsv1.StatefulSetList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
+
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -518,17 +591,11 @@ func (m *K8) GetStatefulSets(ns string) (*appsv1.StatefulSetList, error) {
 // ns: namespace
 // return: appsv1.DaemonSetList, error
 func (m *K8) GetDemonSet(ns string) (*appsv1.DaemonSetList, error) {
-	//************
-	//Setup the K8
-	//************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
+
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -547,18 +614,11 @@ func (m *K8) GetDemonSet(ns string) (*appsv1.DaemonSetList, error) {
 // regex_service_name: regex to match service name
 // return: v1.ServiceList, error
 func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.ServiceDetails, error) {
-	//***************
-	//Load the Config
-	//***************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return nil, err
-	}
 
 	//**********************
 	// creates the clientset
 	//**********************
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err := kubernetes.NewForConfig(m.config)
 	if err != nil {
 		return nil, err
 	}
@@ -579,10 +639,10 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 					if len(o.Spec.Ports) > 0 {
 
 						ports = append(ports, body_types.ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP, Port: o.Spec.Ports[0].Port})
-						log.Printf("Info: %s; %s:%v", o.Name, i.IP, o.Spec.Ports[0].Port)
+						//log.Printf("Info: %s; %s:%v", o.Name, i.IP, o.Spec.Ports[0].Port)
 					} else {
 						ports = append(ports, body_types.ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP})
-						log.Printf("Info: %s; %s", o.Name, i.IP)
+						//log.Printf("Info: %s; %s", o.Name, i.IP)
 					}
 
 				}
@@ -593,10 +653,10 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 				if res {
 					if len(o.Spec.Ports) > 0 {
 						ports = append(ports, body_types.ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i, Port: o.Spec.Ports[0].Port})
-						log.Printf("Info: %s; %s", o.Name, i)
+						//log.Printf("Info: %s; %s", o.Name, i)
 					} else {
 						ports = append(ports, body_types.ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i})
-						log.Printf("Info: %s; %s", o.Name, i)
+						//log.Printf("Info: %s; %s", o.Name, i)
 					}
 
 				}
@@ -607,6 +667,33 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 	return ports, nil
 }
 
+// DeleteNS deletes a namespace in a k8 cluster
+// ns: namespace
+// return: error
+// Does not delete default namespace
+func (m *K8) DeleteNS(ns string) error {
+
+	if strings.ToLower(ns) == "default" {
+		return errors.New("cannot delete default name space")
+	}
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().Namespaces().Delete(context.TODO(), ns, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // CreateNS creates a namespace in a k8 cluster
 // ns: namespace
 // return: error
@@ -614,14 +701,10 @@ func (m *K8) CreateNS(ns string) error {
 	//***************
 	//Load the Config
 	//***************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return err
-	}
+
 	if strings.ToLower(ns) == "default" {
 		return errors.New("cannot create default name space")
 	}
-	ctx := context.Background()
 
 	if ns != "" {
 		namespace := "kind: Namespace\napiVersion: v1\nmetadata:\n  name: " + ns + "\n  labels:\n    name: " + ns
@@ -629,39 +712,7 @@ func (m *K8) CreateNS(ns string) error {
 		//**********
 		//ApplyYaml
 		//**********
-		m.ApplyYaml(ctx, config, namespace, ns)
-		/*if err != nil {
-			return err
-		}*/
-	}
-
-	return nil
-}
-
-// DeleteNS deletes a namespace in a k8 cluster
-// ns: namespace
-// return: error
-// Does not delete default namespace
-func (m *K8) DeleteNS(ns string) error {
-	//***************
-	//Load the Config
-	//***************
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return err
-	}
-	if strings.ToLower(ns) == "default" {
-		return errors.New("cannot delete default name space")
-	}
-	ctx := context.Background()
-
-	if ns != "" {
-		namespace := "kind: Namespace\napiVersion: v1\nmetadata:\n  name: " + ns + "\n  labels:\n    name: " + ns
-		log.Print("Info: Deleting Namespace " + ns + " **")
-		//**********
-		//DeleteYaml
-		//**********
-		m.DeleteYaml(ctx, config, namespace, ns)
+		m.ApplyYaml(namespace, ns)
 		/*if err != nil {
 			return err
 		}*/
@@ -687,12 +738,12 @@ func (m *K8) DeleteNS(ns string) error {
 			"service:nginx(.*)",
 		}
 */
-func (m *K8) CheckStatusOf(ns string, checks []interface{}) (bool, []string, error) {
+func (m *K8) CheckStatusOf(ns string, checks []interface{}, not_running bool) (bool, []string, error) {
 	green := color.FgGreen.Render
 	red := color.FgRed.Render
 	var results []string
 	all_completed := true
-
+	//all_not_running := true
 	//type:name
 	deployments, err := m.GetDeployments(ns)
 	if err != nil {
@@ -778,6 +829,20 @@ func (m *K8) CheckStatusOf(ns string, checks []interface{}) (bool, []string, err
 			}
 		}
 	}
+
+	if not_running {
+		if len(results) == 0 {
+			return true, results, nil
+		} else {
+			return false, results, nil
+		}
+	}
+
+	/*for _, r := range results {
+		if strings.Contains(r, "Not Ready") {
+			all_not_running = false
+		}
+	}*/
 
 	return all_completed, results, nil
 }

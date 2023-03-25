@@ -108,11 +108,8 @@ func (m *K8) UninstallHelmChart(release_name string, namespace string) error {
 	actionConfig := new(action.Configuration)
 	// You can pass an empty string instead of settings.Namespace() to list
 	// all namespaces
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return err
-	}
-	getter := NewRESTClientGetter(namespace, *config)
+
+	getter := NewRESTClientGetter(namespace, *m.config)
 
 	if err := actionConfig.Init(getter, namespace,
 		os.Getenv("HELM_DRIVER"), log.Printf); err != nil {
@@ -149,11 +146,7 @@ func (m *K8) DeployHelmChart(chart_path string, release_name string, namespace s
 
 	actionConfig := new(action.Configuration)
 
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return err
-	}
-	getter := NewRESTClientGetter(nameSpace, *config)
+	getter := NewRESTClientGetter(nameSpace, *m.config)
 	// You can pass an empty string instead of settings.Namespace() to list
 	// all namespaces
 	if err := actionConfig.Init(getter, nameSpace,
@@ -208,11 +201,7 @@ func (m *K8) UpgradeHelmChart(chart_path string, release_name string, namespace 
 
 	actionConfig := new(action.Configuration)
 
-	config, err := m.buildRestConfig()
-	if err != nil {
-		return err
-	}
-	getter := NewRESTClientGetter(nameSpace, *config)
+	getter := NewRESTClientGetter(nameSpace, *m.config)
 	// You can pass an empty string instead of settings.Namespace() to list
 	// all namespaces
 	if err := actionConfig.Init(getter, nameSpace,
