@@ -225,3 +225,6 @@ go_k8_helm is Apache 2.0 licensed.
 - Document functions
 - Added Delete actions for DemonSet, PV, PVC
 - changed way DeleteNS works
+
+### v0.2.2
+- Fix a dependance that should not be getting used

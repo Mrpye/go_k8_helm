@@ -12,7 +12,6 @@ import (
 
 	lib_log "github.com/Mrpye/golib/log"
 	lib_string "github.com/Mrpye/golib/string"
-	"github.com/Mrpye/helm-api/modules/body_types"
 	"github.com/gookit/color"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -681,7 +680,7 @@ func (m *K8) DeleteDemonSet(ns string, name string) error {
 // ns: namespace
 // regex_service_name: regex to match service name
 // return: v1.ServiceList, error
-func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.ServiceDetails, error) {
+func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]ServiceDetails, error) {
 
 	//**********************
 	// creates the clientset
@@ -698,7 +697,7 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 		return nil, err
 	}
 
-	var ports []body_types.ServiceDetails
+	var ports []ServiceDetails
 	for _, o := range services.Items {
 		if len(o.Status.LoadBalancer.Ingress) > 0 {
 			for _, i := range o.Status.LoadBalancer.Ingress {
@@ -706,10 +705,10 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 				if res {
 					if len(o.Spec.Ports) > 0 {
 
-						ports = append(ports, body_types.ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP, Port: o.Spec.Ports[0].Port})
+						ports = append(ports, ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP, Port: o.Spec.Ports[0].Port})
 						//log.Printf("Info: %s; %s:%v", o.Name, i.IP, o.Spec.Ports[0].Port)
 					} else {
-						ports = append(ports, body_types.ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP})
+						ports = append(ports, ServiceDetails{ServiceType: "LoadBalancer", ServiceName: o.Name, IP: i.IP})
 						//log.Printf("Info: %s; %s", o.Name, i.IP)
 					}
 
@@ -720,10 +719,10 @@ func (m *K8) GetServiceIP(ns string, regex_service_name string) ([]body_types.Se
 				res, _ := regexp.MatchString(regex_service_name, o.Name)
 				if res {
 					if len(o.Spec.Ports) > 0 {
-						ports = append(ports, body_types.ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i, Port: o.Spec.Ports[0].Port})
+						ports = append(ports, ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i, Port: o.Spec.Ports[0].Port})
 						//log.Printf("Info: %s; %s", o.Name, i)
 					} else {
-						ports = append(ports, body_types.ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i})
+						ports = append(ports, ServiceDetails{ServiceType: "ClusterIP", ServiceName: o.Name, IP: i})
 						//log.Printf("Info: %s; %s", o.Name, i)
 					}
 
