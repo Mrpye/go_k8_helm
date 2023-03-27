@@ -212,10 +212,16 @@ func main() {
 go_k8_helm is Apache 2.0 licensed.
 
 ## Change Log
+
 ### v0.2.0
+- Update documents
+- Update functions Document
+- Added Delete actions for pods, ns, deployments, service
+
+
+### v0.2.1
 - Added examples
 - Update documents
 - Document functions
-- Added Delete actions for pods, ns, deployments, service, DemonSet, PV, PVC
+- Added Delete actions for DemonSet, PV, PVC
 - changed way DeleteNS works
-
