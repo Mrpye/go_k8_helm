@@ -207,5 +207,15 @@ func main() {
 - [https://github.com/kubernetes/client-go](https://github.com/kubernetes/client-go)
 
 
+
 ## license
 go_k8_helm is Apache 2.0 licensed.
+
+## Change Log
+### v0.2.0
+- Added examples
+- Update documents
+- Document functions
+- Added Delete actions for pods, ns, deployments, service, DemonSet, PV, PVC
+- changed way DeleteNS works
+

@@ -433,6 +433,29 @@ func (m *K8) GetSecrets(ns string) (*v1.SecretList, error) {
 	return pods, nil
 }
 
+// DeleteSecrets deletes secrets from a k8 cluster
+// ns: namespace
+// name: name of secret
+// return: error
+func (m *K8) DeleteSecrets(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().Secrets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetPods gets pods from a k8 cluster
 // ns: namespace
 // return: v1.PodList, error
@@ -587,6 +610,29 @@ func (m *K8) GetStatefulSets(ns string) (*appsv1.StatefulSetList, error) {
 	return pods, nil
 }
 
+// DeleteStatefulSets deletes a statefulset from a k8 cluster
+// ns: namespace
+// name: name of the statefulset
+// return: error
+func (m *K8) DeleteStatefulSets(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.AppsV1().StatefulSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // GetDemonSet gets demonsets from a k8 cluster
 // ns: namespace
 // return: appsv1.DaemonSetList, error
@@ -607,6 +653,28 @@ func (m *K8) GetDemonSet(ns string) (*appsv1.DaemonSetList, error) {
 		return nil, err
 	}
 	return pods, nil
+}
+
+// GetDemonSet gets demonsets from a k8 cluster
+// ns: namespace
+// return: appsv1.DaemonSetList, error
+func (m *K8) DeleteDemonSet(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	clientset, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = clientset.AppsV1().DaemonSets(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // GetServiceIP gets service ip from a k8 cluster
@@ -845,4 +913,50 @@ func (m *K8) CheckStatusOf(ns string, checks []interface{}, not_running bool) (b
 	}*/
 
 	return all_completed, results, nil
+}
+
+// DeletePVC deletes a PVC
+// - ns is the namespace
+// - name is the name of the PVC
+// - returns an error if there is one
+func (m *K8) DeletePVC(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().PersistentVolumeClaims(ns).Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// DeletePV deletes a PV
+// - ns is the namespace
+// - name is the name of the PV
+// - returns an error if there is one
+func (m *K8) DeletePV(ns string, name string) error {
+
+	//**********************
+	// creates the clientset
+	//**********************
+	client_set, err := kubernetes.NewForConfig(m.config)
+	if err != nil {
+		return err
+	}
+
+	// get pods in all the namespaces by omitting namespace
+	// Or specify namespace to get pods in particular namespace
+	err = client_set.CoreV1().PersistentVolumes().Delete(context.TODO(), name, metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }
