@@ -228,3 +228,6 @@ go_k8_helm is Apache 2.0 licensed.
 
 ### v0.2.2
 - Fix a dependance that should not be getting used
+
+### cv0.2.3
+- updated the reference for golib to v0.2.2
