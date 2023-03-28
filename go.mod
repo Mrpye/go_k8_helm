@@ -3,7 +3,7 @@ module github.com/Mrpye/go_k8_helm
 go 1.18
 
 require (
-	github.com/Mrpye/golib v0.2.1
+	github.com/Mrpye/golib v0.2.2
 	github.com/gookit/color v1.5.2
 	github.com/pkg/errors v0.9.1
 	github.com/theckman/go-flock v0.8.1

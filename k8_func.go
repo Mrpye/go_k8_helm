@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	lib_log "github.com/Mrpye/golib/log"
-	lib_string "github.com/Mrpye/golib/string"
+	"github.com/Mrpye/golib/str"
 	"github.com/gookit/color"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -194,7 +194,7 @@ func (m *K8) ProcessK8File(file_data []byte, ns string, apply bool) error {
 		}
 		if ns != "default" && ns != "" && !found {
 			namespace := "kind: Namespace\napiVersion: v1\nmetadata:\n  name: " + ns + "\n  labels:\n    name: " + ns
-			parts = lib_string.InsertString(parts, 0, namespace)
+			parts = str.InsertString(parts, 0, namespace)
 		}
 	}
 
